@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "384380567762",
+    "project_id": "sitemate-dev-7ae81",
+    "storage_bucket": "sitemate-dev-7ae81.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:384380567762:android:74e4bf5ff72d93b88e6d0b",
+        "android_client_info": {
+          "package_name": "com.wharzc.sitemate"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "384380567762-bfjn8tk9sdhicel9fnkkmcav1bj42s6l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wharzc.sitemate",
+            "certificate_hash": "cff8eaf5ea8240ec40e7181875656864f66e8186"
+          }
+        },
+        {
+          "client_id": "384380567762-ett1omq1322akvqbonq834uverg71tb9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDAhSXAL1uCqQmM3N6v9rUVPicrN2Wx3k0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "384380567762-ett1omq1322akvqbonq834uverg71tb9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

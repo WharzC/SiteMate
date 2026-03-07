@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "191427882242",
+    "project_id": "sitemate02",
+    "storage_bucket": "sitemate02.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:191427882242:android:9ed70eb0dfe5642778e61b",
+        "android_client_info": {
+          "package_name": "com.wharzc.sitemate_02"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJ0RxEBSfbNlorglZ_no5j6OcfnQZciyE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

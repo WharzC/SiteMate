@@ -54,6 +54,7 @@ fun ProjectReviewScreen(
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
+
         // 2. SUMMARY CARDS
         ReviewSection("Classification") {
             ReviewRow("Type", viewModel.selectedType)
@@ -91,11 +92,11 @@ fun ProjectReviewScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ReviewSection("Assets") {
+       /* ReviewSection("Assets") {
             val photoCount = viewModel.sitePhotos.size
             val docCount = viewModel.documentPhotos.size
             ReviewRow("Attachments", "$photoCount Site Photos, $docCount Documents")
-        }
+        } */
 
         Spacer(modifier = Modifier.height(48.dp))
 

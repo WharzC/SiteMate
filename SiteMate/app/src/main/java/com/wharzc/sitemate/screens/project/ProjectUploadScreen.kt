@@ -49,12 +49,12 @@ fun ProjectUploadScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ProjectWizardHeader(title = "Upload Assets", onBackClick = onBack)
+        ProjectWizardHeader(title = "Upload Geotagged Photos & Documents", onBackClick = onBack)
 
         Text("Optional: Max 10 images.", fontSize = 14.sp, color = androidx.compose.ui.graphics.Color.Gray, modifier = Modifier.padding(bottom = 32.dp, top = 8.dp))
 
         // Read count/list from ViewModel
-        UploadSection("Site Photos", Icons.Filled.AddPhotoAlternate, viewModel.sitePhotos.size, viewModel.sitePhotos) {
+        UploadSection("Geotagged Photos", Icons.Filled.AddPhotoAlternate, viewModel.sitePhotos.size, viewModel.sitePhotos) {
             sitePhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
         Spacer(modifier = Modifier.height(24.dp))

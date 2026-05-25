@@ -237,4 +237,183 @@ class ProjectReportsViewModel : ViewModel() {
             }
         }
     }
+
+    // Add this new method inside ProjectReportsViewModel
+    fun generateOverallProgressReport(
+        context: Context,
+        projectId: String,
+        onComplete: (Boolean) -> Unit
+    ) {
+        isGenerating = true
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                // Fetch project details
+                val projectDoc = db.collection("projects").document(projectId).get().await()
+                val projectName = projectDoc.getString("name") ?: "Unknown Project"
+                val overallProgress = projectDoc.getDouble("overallProgress") ?: 0.0
+                val startDate = projectDoc.getString("startDate") ?: "Not Set"
+                val endDate = projectDoc.getString("endDate") ?: "Not Set"
+
+                // Fetch milestones
+                val milestonesSnapshot = db.collection("projects")
+                    .document(projectId)
+                    .collection("milestones")
+                    .get()
+                    .await()
+                val milestones = milestonesSnapshot.documents.mapNotNull { doc ->
+                    val title = doc.id
+                    val progress = doc.getDouble("progress") ?: 0.0
+                    val completedWorks = (doc.get("completedWorks") as? List<String>) ?: emptyList()
+                    val totalWorks = (doc.get("totalWorks") as? Long)?.toInt() ?: 0 // you may need to store totalWorks per milestone during project creation; if not, we can skip or compute differently
+                    MilestoneReportItem(
+                        title = title,
+                        progress = progress.toFloat(),
+                        completedCount = completedWorks.size,
+                        totalCount = totalWorks
+                    )
+                }
+
+                val pdfDocument = PdfDocument()
+                var pageNumber = 1
+                var pageInfo = PdfDocument.PageInfo.Builder(595, 842, pageNumber).create()
+                var page = pdfDocument.startPage(pageInfo)
+                val canvas = page.canvas
+
+                val titlePaint = Paint().apply { textSize = 20f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); color = Color.BLACK }
+                val headerPaint = Paint().apply { textSize = 14f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); color = Color.DKGRAY }
+                val textPaint = Paint().apply { textSize = 12f; color = Color.BLACK }
+                val linePaint = Paint().apply { color = Color.LTGRAY; strokeWidth = 1f }
+
+                var y = 50f
+                val startX = 50f
+
+                fun checkPageBreak() {
+                    if (y > 780f) {
+                        pdfDocument.finishPage(page)
+                        pageNumber++
+                        pageInfo = PdfDocument.PageInfo.Builder(595, 842, pageNumber).create()
+                        page = pdfDocument.startPage(pageInfo)
+                        y = 50f
+                    }
+                }
+
+                canvas.drawText("OVERALL PROGRESS REPORT", startX, y, titlePaint)
+                y += 40f
+                canvas.drawText("Project: $projectName", startX, y, headerPaint)
+                y += 20f
+                canvas.drawText("Start Date: $startDate", startX, y, textPaint)
+                y += 20f
+                canvas.drawText("Target Deadline: $endDate", startX, y, textPaint)
+                y += 30f
+                canvas.drawLine(startX, y, 545f, y, linePaint)
+                y += 30f
+
+                // Overall progress circle representation (optional text)
+                val overallPercent = (overallProgress * 100).toInt()
+                canvas.drawText("Overall Completion: $overallPercent%", startX, y, headerPaint)
+                y += 30f
+                canvas.drawLine(startX, y, 545f, y, linePaint)
+                y += 30f
+
+                canvas.drawText("Milestone Breakdown:", startX, y, headerPaint)
+                y += 25f
+
+                if (milestones.isEmpty()) {
+                    canvas.drawText("No milestones found.", startX + 15f, y, textPaint)
+                    y += 20f
+                } else {
+                    for (m in milestones) {
+                        checkPageBreak()
+                        val status = when {
+                            m.progress == 1f -> "Completed"
+                            m.progress > 0f -> "In Progress"
+                            else -> "Pending"
+                        }
+                        canvas.drawText("• ${m.title}: ${(m.progress * 100).toInt()}% ($status)", startX + 10f, y, textPaint)
+                        y += 20f
+                        // Optional: show completed/total works if totalWorks > 0
+                        if (m.totalCount > 0) {
+                            canvas.drawText("   ${m.completedCount}/${m.totalCount} works completed", startX + 20f, y, textPaint)
+                            y += 20f
+                        }
+                        checkPageBreak()
+                    }
+                }
+
+                pdfDocument.finishPage(page)
+
+                // Save PDF to Downloads
+                val timestamp = System.currentTimeMillis()
+                val fileName = "OverallProgress_${projectId}_$timestamp.pdf"
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                val file = File(downloadsDir, fileName)
+                pdfDocument.writeTo(FileOutputStream(file))
+                pdfDocument.close()
+
+                // Save record to Firestore
+                val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                val displayDate = dateFormatter.format(Date())
+                val reportData = hashMapOf(
+                    "title" to "Overall Progress Report",
+                    "type" to "Overall Progress",
+                    "date" to displayDate,
+                    "timestamp" to timestamp
+                )
+                db.collection("projects").document(projectId)
+                    .collection("reports")
+                    .document("overall_$timestamp")
+                    .set(reportData)
+                    .await()
+
+                // Update UI list
+                reports.add(0, ReportDoc(
+                    id = "overall_$timestamp",
+                    title = "Overall Progress Report",
+                    date = displayDate,
+                    type = "Overall Progress",
+                    timestamp = timestamp
+                ))
+                reports.sortByDescending { it.timestamp }
+
+                isGenerating = false
+                onComplete(true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isGenerating = false
+                onComplete(false)
+            }
+        }
+    }
+
+    // Add this method inside ProjectReportsViewModel
+    fun deleteReport(projectId: String, reportDoc: ReportDoc, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                db.collection("projects")
+                    .document(projectId)
+                    .collection("reports")
+                    .document(reportDoc.id)
+                    .delete()
+                    .await()
+
+                // Remove from local list
+                reports.removeAll { it.id == reportDoc.id }
+                onSuccess()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Optionally handle failure
+            }
+        }
+    }
+
+    // Helper data class
+    data class MilestoneReportItem(
+        val title: String,
+        val progress: Float,
+        val completedCount: Int,
+        val totalCount: Int
+    )
 }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "253299080638",
+    "project_id": "motoguard-84582",
+    "storage_bucket": "motoguard-84582.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:253299080638:android:ff79cd368c04430f57cdef",
+        "android_client_info": {
+          "package_name": "com.wharzc.motoguard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYlVFrGKDiaSRMLVmhIxC2tnhownSBpmk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -127,24 +127,44 @@ class ProjectDailyViewModel : ViewModel() {
 
     @Suppress("UNCHECKED_CAST")
     private fun fetchActiveMilestoneWorks(projectId: String, projectType: String) {
-        val isVertical = projectType.contains("Vertical", ignoreCase = true)
-        val path = if (isVertical) "1/VERTICAL CONSTRUCTION" else "2/HORIZONTAL CONSTRUCTION"
+        val rtdbPath = when {
+            projectType.contains("Vertical", ignoreCase = true) -> "1/VERTICAL CONSTRUCTION"
+            projectType.contains("Horizontal", ignoreCase = true) -> "2/HORIZONTAL CONSTRUCTION"
+            projectType.contains("Demolition", ignoreCase = true) -> "3/DEMOLITION"
+            else -> return
+        }
 
-        FirebaseDatabase.getInstance().getReference(path)
+        FirebaseDatabase.getInstance().getReference(rtdbPath)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val orderedPhaseNames = mutableListOf<String>()
                     val phaseWorksMap = mutableMapOf<String, List<String>>()
+
                     for (phaseNode in snapshot.children) {
                         val phaseName = phaseNode.key ?: continue
                         orderedPhaseNames.add(phaseName)
+
                         val worksList = mutableListOf<String>()
-                        phaseNode.child("Works").children.forEach { workItem ->
-                            workItem.getValue(String::class.java)?.let { worksList.add(it) }
+                        val worksNode = phaseNode.child("Works")
+
+                        if (projectType.contains("Demolition", ignoreCase = true)) {
+                            // DEMOLITION: Works contains categories -> each category has list of works
+                            for (categoryNode in worksNode.children) {
+                                for (workNode in categoryNode.children) {
+                                    workNode.getValue(String::class.java)?.let { worksList.add(it) }
+                                }
+                            }
+                        } else {
+                            // VERTICAL / HORIZONTAL: Works is a direct list of strings
+                            worksNode.children.forEach { workItem ->
+                                workItem.getValue(String::class.java)?.let { worksList.add(it) }
+                            }
                         }
                         phaseWorksMap[phaseName] = worksList
                     }
-                    if (isVertical && orderedPhaseNames.size >= 9) {
+
+                    // Apply vertical sorting if needed (same as before)
+                    if (projectType.contains("Vertical", ignoreCase = true) && orderedPhaseNames.size >= 9) {
                         val order = listOf(7, 1, 8, 0, 3, 6, 5, 4, 2)
                         val sortedNames = mutableListOf<String>()
                         try {
@@ -154,10 +174,13 @@ class ProjectDailyViewModel : ViewModel() {
                         } catch (e: Exception) { }
                     }
 
-                    // Store the total phase count for overall math later!
                     totalMilestonesCount = orderedPhaseNames.size
 
-                    FirebaseFirestore.getInstance().collection("projects").document(projectId).collection("milestones").get()
+                    FirebaseFirestore.getInstance()
+                        .collection("projects")
+                        .document(projectId)
+                        .collection("milestones")
+                        .get()
                         .addOnSuccessListener { firestoreDocs ->
                             var activePhase: String? = null
                             var completedWorksInActivePhase = emptyList<String>()
@@ -185,9 +208,13 @@ class ProjectDailyViewModel : ViewModel() {
                                 totalWorksForActiveMilestone = 0
                             }
                             isLoading = false
-                        }.addOnFailureListener { isLoading = false }
+                        }
+                        .addOnFailureListener { isLoading = false }
                 }
-                override fun onCancelled(error: DatabaseError) { isLoading = false }
+
+                override fun onCancelled(error: DatabaseError) {
+                    isLoading = false
+                }
             })
     }
 

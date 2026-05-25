@@ -22,14 +22,18 @@ fun CreateProjectScreen(
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     // --- Data Definitions ---
-    val constructionTypes = listOf("Vertical Construction", "Horizontal Construction")
+    val constructionTypes = listOf("Vertical Construction", "Horizontal Construction", "DEMOLITION")
     val verticalCategories = listOf("Residential", "Commercial", "Industrial")
     val horizontalCategories = listOf("Transportation")
 
-    // Determine current categories based on ViewModel's selected Type
-    val currentCategories = if (viewModel.selectedType == "Vertical Construction") verticalCategories else horizontalCategories
+    // Determine current categories based on ViewModel's selected Type (skip for DEMOLITION)
+    val currentCategories = when (viewModel.selectedType) {
+        "Vertical Construction" -> verticalCategories
+        "Horizontal Construction" -> horizontalCategories
+        else -> emptyList()
+    }
 
-    // Determine sub-categories based on ViewModel's selected Category
+    // Determine sub-categories based on ViewModel's selected Category (skip for DEMOLITION)
     val currentSubCategories = when (viewModel.selectedCategory) {
         "Residential" -> listOf("Single-Family", "Multi-Family", "High-Rise")
         "Commercial" -> listOf("Office", "Retail", "Institutional")
@@ -71,8 +75,8 @@ fun CreateProjectScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Category Dropdown
-        if (viewModel.selectedType.isNotEmpty()) {
+        // Category Dropdown (only if not DEMOLITION and a type is selected)
+        if (viewModel.selectedType.isNotEmpty() && viewModel.selectedType != "DEMOLITION") {
             DropdownField(
                 label = "Category",
                 options = currentCategories,
@@ -83,12 +87,11 @@ fun CreateProjectScreen(
                     viewModel.selectedSubCategory = ""
                 }
             )
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Sub-Category Dropdown
-        if (viewModel.selectedCategory.isNotEmpty()) {
+        // Sub-Category Dropdown (only if not DEMOLITION and a category is selected)
+        if (viewModel.selectedType != "DEMOLITION" && viewModel.selectedCategory.isNotEmpty()) {
             DropdownField(
                 label = "Sub-Category",
                 options = currentSubCategories,
@@ -97,12 +100,16 @@ fun CreateProjectScreen(
                     viewModel.selectedSubCategory = sub
                 }
             )
+            Spacer(modifier = Modifier.height(48.dp))
+        } else if (viewModel.selectedType == "DEMOLITION") {
+            // Add spacing to keep layout consistent
+            Spacer(modifier = Modifier.height(48.dp))
+        } else {
+            Spacer(modifier = Modifier.height(48.dp))
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Proceed Button
-        if (viewModel.selectedSubCategory.isNotEmpty()) {
+        // Proceed Button (enabled if sub-category chosen OR type is DEMOLITION)
+        if (viewModel.selectedSubCategory.isNotEmpty() || viewModel.selectedType == "DEMOLITION") {
             Button(
                 onClick = { showConfirmDialog = true },
                 modifier = Modifier.fillMaxWidth().height(50.dp),

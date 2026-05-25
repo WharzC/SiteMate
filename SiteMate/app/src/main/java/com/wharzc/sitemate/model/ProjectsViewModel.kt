@@ -1,6 +1,9 @@
 package com.wharzc.sitemate.model
 
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth // NEW: Required to get the Engineer's ID
 import com.google.firebase.firestore.FirebaseFirestore
@@ -12,6 +15,17 @@ class ProjectsViewModel : ViewModel() {
     var projects = mutableStateListOf<Project>()
         private set
 
+    var searchQuery by mutableStateOf("")
+
+    val filteredProjects: List<Project>
+        get() = if (searchQuery.isEmpty()) {
+            projects
+        } else {
+            projects.filter {
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                        it.location.contains(searchQuery, ignoreCase = true)
+            }
+        }
     init {
         listenToProjects()
     }

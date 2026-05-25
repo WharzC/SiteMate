@@ -160,24 +160,39 @@ fun ClientReportsArchiveTab(
                     title = report.title,
                     date = report.date,
                     type = report.type,
+                    isDeleteMode = false,           // Clients cannot delete reports
                     onDownload = {
-                        Toast.makeText(context, "Downloading PDF to your phone...", Toast.LENGTH_SHORT).show()
-
-                        // Dynamically reconstructs the PDF natively onto the Client's phone
-                        viewModel.generateReport(
-                            context = context,
-                            projectId = projectId,
-                            type = report.type,
-                            dateString = report.id
-                        ) { success ->
-                            if (success) {
-                                Toast.makeText(context, "PDF saved to your Downloads folder!", Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(context, "Download failed. Please try again.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Downloading PDF...", Toast.LENGTH_SHORT).show()
+                        when (report.type) {
+                            "Overall Progress" -> {
+                                viewModel.generateOverallProgressReport(
+                                    context = context,
+                                    projectId = projectId
+                                ) { success ->
+                                    if (success) {
+                                        Toast.makeText(context, "Overall report saved to Downloads", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "Download failed", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                            else -> { // Daily Accomplishment Report
+                                viewModel.generateReport(
+                                    context = context,
+                                    projectId = projectId,
+                                    type = report.type,
+                                    dateString = report.id  // ID is the date string for daily reports
+                                ) { success ->
+                                    if (success) {
+                                        Toast.makeText(context, "PDF saved to Downloads", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "Download failed", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             }
                         }
                     },
-                    onShare = { Toast.makeText(context, "Sharing coming soon", Toast.LENGTH_SHORT).show() }
+                    onDelete = {}  // No-op for clients
                 )
             }
         }

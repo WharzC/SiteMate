@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
+
 }
 
 android {
@@ -20,6 +21,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -36,9 +38,21 @@ android {
     buildFeatures {
         compose = true
     }
+
+
 }
 
 dependencies {
+
+    implementation("com.cloudinary:cloudinary-android:2.5.0")
+    // ViewModel and Compose integration
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
+
+    //ImageKit
+    implementation("com.github.imagekit-developer:imagekit-android:2.0.1")
+
+
     // 1. Firebase BoM (Bill of Materials) - This automatically manages all Firebase versions!
     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
 

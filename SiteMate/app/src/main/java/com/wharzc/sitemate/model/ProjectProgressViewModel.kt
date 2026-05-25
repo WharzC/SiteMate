@@ -14,14 +14,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-// NEW: Added completedWorks to track exactly which tasks are done
 data class Milestone(
     val id: String,
     val title: String,
     val progress: Float = 0f,
     val status: String = "Pending",
-    val works: List<String> = emptyList(),
-    val completedWorks: List<String> = emptyList()
+    val works: List<String> = emptyList(),               // flat list for all activities
+    val completedWorks: List<String> = emptyList(),
+    val categorizedWorks: Map<String, List<String>>? = null // only for demolition
 )
 
 class ProjectProgressViewModel : ViewModel() {
@@ -48,10 +48,15 @@ class ProjectProgressViewModel : ViewModel() {
     fun loadProgress(projectId: String, projectType: String) {
         isLoading = true
 
-        val isVertical = projectType.contains("Vertical", ignoreCase = true)
-        val path = if (isVertical) "1/VERTICAL CONSTRUCTION" else "2/HORIZONTAL CONSTRUCTION"
+        // Determine RTDB path based on project type
+        val rtdbPath = when {
+            projectType.contains("Vertical", ignoreCase = true) -> "1/VERTICAL CONSTRUCTION"
+            projectType.contains("Horizontal", ignoreCase = true) -> "2/HORIZONTAL CONSTRUCTION"
+            projectType.contains("Demolition", ignoreCase = true) -> "3/DEMOLITION"
+            else -> return
+        }
 
-        val rtdbRef = FirebaseDatabase.getInstance().getReference(path)
+        val rtdbRef = FirebaseDatabase.getInstance().getReference(rtdbPath)
 
         rtdbRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -59,60 +64,75 @@ class ProjectProgressViewModel : ViewModel() {
 
                 for (phaseNode in snapshot.children) {
                     val phaseName = phaseNode.key ?: continue
-                    val worksList = mutableListOf<String>()
-                    phaseNode.child("Works").children.forEach { workItem ->
-                        workItem.getValue(String::class.java)?.let { worksList.add(it) }
-                    }
-                    templateMilestones.add(
-                        Milestone(
-                            id = phaseName,
-                            title = phaseName,
-                            works = worksList
+
+                    if (projectType.contains("Demolition", ignoreCase = true)) {
+                        // --- DEMOLITION: nested categories ---
+                        val worksObject = phaseNode.child("Works")
+                        val categorized = mutableMapOf<String, List<String>>()
+                        val flatWorks = mutableListOf<String>()
+
+                        worksObject.children.forEach { categoryNode ->
+                            val categoryName = categoryNode.key ?: return@forEach
+                            val items = mutableListOf<String>()
+                            categoryNode.children.forEach { itemNode ->
+                                itemNode.getValue(String::class.java)?.let {
+                                    items.add(it)
+                                    flatWorks.add(it)
+                                }
+                            }
+                            if (items.isNotEmpty()) {
+                                categorized[categoryName] = items
+                            }
+                        }
+
+                        templateMilestones.add(
+                            Milestone(
+                                id = phaseName,
+                                title = phaseName,
+                                works = flatWorks,
+                                categorizedWorks = categorized
+                            )
                         )
-                    )
+                    } else {
+                        // --- VERTICAL / HORIZONTAL: flat works list ---
+                        val worksList = mutableListOf<String>()
+                        phaseNode.child("Works").children.forEach { workItem ->
+                            workItem.getValue(String::class.java)?.let { worksList.add(it) }
+                        }
+                        templateMilestones.add(
+                            Milestone(
+                                id = phaseName,
+                                title = phaseName,
+                                works = worksList
+                            )
+                        )
+                    }
                 }
 
-                // THE FIX: Sort Vertical Construction Chronologically based on your exact index map!
-                if (isVertical && templateMilestones.size >= 9) {
+                // Apply chronological sorting for Vertical (if needed)
+                if (projectType.contains("Vertical", ignoreCase = true) && templateMilestones.size >= 9) {
                     val order = listOf(7, 1, 8, 0, 3, 6, 5, 4, 2)
                     templateMilestones = try {
                         order.map { templateMilestones[it] }.toMutableList()
-                    } catch (e: Exception) {
-                        templateMilestones
-                    }
+                    } catch (e: Exception) { templateMilestones }
                 }
 
+                // Firestore: fetch completed works and calculate progress
                 val db = FirebaseFirestore.getInstance()
-
-                // Fetch Dates to calculate Elapsed and Remaining Days
-                db.collection("projects").document(projectId).get()
-                    .addOnSuccessListener { projDoc ->
-                        val startDateStr = projDoc.getString("startDate") ?: ""
-                        targetDeadline = projDoc.getString("endDate") ?: "Not Set"
-                        calculateDays(startDateStr, targetDeadline)
-                    }
-
-                // Fetch Auto-Progress from Firestore (Driven by Daily Logs)
                 db.collection("projects").document(projectId).collection("milestones").get()
                     .addOnSuccessListener { firestoreDocs ->
                         val finalMilestones = templateMilestones.map { template ->
                             val savedDoc = firestoreDocs.documents.find { it.id == template.id }
                             if (savedDoc != null) {
-                                // Extract the completed works list (Will be saved by the Daily Tab later)
-                                val completed =
-                                    savedDoc.get("completedWorks") as? List<String> ?: emptyList()
-
-                                // Auto-calculate percentage!
+                                val completed = savedDoc.get("completedWorks") as? List<String> ?: emptyList()
                                 val progress = if (template.works.isNotEmpty()) {
                                     completed.size.toFloat() / template.works.size.toFloat()
                                 } else 0f
-
                                 val status = when {
                                     progress == 0f -> "Pending"
                                     progress == 1f -> "Completed"
                                     else -> "In Progress"
                                 }
-
                                 template.copy(
                                     progress = progress,
                                     status = status,
@@ -124,10 +144,17 @@ class ProjectProgressViewModel : ViewModel() {
                         }
 
                         milestones = finalMilestones
-                        overallProgress =
-                            if (finalMilestones.isEmpty()) 0f else finalMilestones.map { it.progress }
-                                .average().toFloat()
+                        overallProgress = if (finalMilestones.isEmpty()) 0f
+                        else finalMilestones.map { it.progress }.average().toFloat()
                         isLoading = false
+                    }
+
+                // Load dates (unchanged)
+                db.collection("projects").document(projectId).get()
+                    .addOnSuccessListener { projDoc ->
+                        val startDateStr = projDoc.getString("startDate") ?: ""
+                        targetDeadline = projDoc.getString("endDate") ?: "Not Set"
+                        calculateDays(startDateStr, targetDeadline)
                     }
             }
 

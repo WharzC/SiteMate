@@ -206,7 +206,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        composable("project_upload") {
+                       composable("project_upload") {
                             ProjectUploadScreen(
                                 viewModel = viewModel,
                                 onProceed = { navController.navigate("project_review") },

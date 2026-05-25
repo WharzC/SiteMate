@@ -33,12 +33,21 @@ fun ProjectsScreen(
     var projectToDeleteId by remember { mutableStateOf<String?>(null) }
     var projectToDeleteTitle by remember { mutableStateOf("") }
 
-    // --- FIXED: Scaffold completely removed! Just a clean, simple Column. ---
+    // --- SORT STATE ---
+    var sortOption by remember { mutableStateOf("Name") }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    // Sort the viewModel's filtered list dynamically
+    val finalSortedProjects = when (sortOption) {
+        "Date" -> viewModel.filteredProjects.sortedBy { it.id } // Replace it.id with it.timestamp if your Project data class has it
+        else -> viewModel.filteredProjects.sortedBy { it.name?.lowercase() }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp)
-            .padding(top = 24.dp) // Only one single, fixed gap at the top!
+            .padding(top = 24.dp)
     ) {
 
         // Create Project Button
@@ -88,7 +97,65 @@ fun ProjectsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Project List
+        // --- SEARCH BAR & SORT DROPDOWN ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = viewModel.searchQuery,
+                onValueChange = { viewModel.searchQuery = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search by project name...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = SiteMateOrange) },
+                trailingIcon = {
+                    if (viewModel.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SiteMateOrange,
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Sort Dropdown Button
+            Box {
+                IconButton(
+                    onClick = { showSortMenu = true },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(SiteMateBlue.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(Icons.Default.FilterList, contentDescription = "Sort", tint = SiteMateBlue)
+                }
+
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Sort by Name", fontWeight = if (sortOption == "Name") FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { sortOption = "Name"; showSortMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Sort by Date Created", fontWeight = if (sortOption == "Date") FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { sortOption = "Date"; showSortMenu = false }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Project List (Now using the sorted and filtered list!)
         if (viewModel.projects.isEmpty()) {
             Box(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -96,9 +163,16 @@ fun ProjectsScreen(
             ) {
                 Text("No projects found. Tap '+' to create one.", color = Color.Gray)
             }
+        } else if (finalSortedProjects.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No matching projects found.", color = Color.Gray)
+            }
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(viewModel.projects) { item ->
+                items(finalSortedProjects) { item ->
                     ProjectCardItem(
                         title = item.name ?: "Untitled",
                         subtitle = item.location ?: "Unknown",
@@ -117,11 +191,13 @@ fun ProjectsScreen(
             }
         }
 
-        // --- NEW ULTRA-SLIM FOOTER INSTALLED HERE ---
+// --- ULTRA-SLIM FOOTER ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 4.dp, top = 2.dp),
+                .background(Color.Transparent)
+                // Removed navigationBarsPadding() and locked the bottom padding to exactly 12.dp!
+                .padding(bottom = 12.dp, top = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -145,7 +221,7 @@ fun ProjectsScreen(
                     onClick = {
                         viewModel.deleteProject(projectToDeleteId!!)
                         projectToDeleteId = null
-                        isDeleteMode = false // Auto exit delete mode
+                        isDeleteMode = false
                     }
                 ) {
                     Text("Delete", color = Color.Red, fontWeight = FontWeight.Bold)

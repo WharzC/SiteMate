@@ -1,5 +1,6 @@
 package com.wharzc.sitemate.screens.project.dashboard
 
+import android.R.attr.top
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -62,12 +63,16 @@ import java.util.Calendar
 import android.app.DownloadManager
 import android.os.Environment
 import android.content.Context
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextDecoration
+import com.wharzc.sitemate.model.ReportDoc
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,13 +137,14 @@ fun SingleProjectDashboardScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SiteMateBlue)
             )
         },
+
         bottomBar = {
-            // This Column contains the Nav Bar and the Footer together
             Column(modifier = Modifier.background(Color.White)) {
                 NavigationBar(
+                    // FIX: Removed the forced 68.dp height so the text doesn't get cut off!
                     containerColor = Color.White,
                     contentColor = SiteMateBlue,
-                    tonalElevation = 0.dp // Set to 0 to prevent a gray tint line above footer
+                    tonalElevation = 0.dp
                 ) {
                     val tabs = listOf(
                         Triple("Home", Icons.Filled.Home, 0),
@@ -155,22 +161,20 @@ fun SingleProjectDashboardScreen(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = SiteMateOrange,
-                                selectedTextColor = SiteMateOrange,
-                                unselectedIconColor = Color.Gray,
-                                unselectedTextColor = Color.Gray,
-                                indicatorColor = Color.Transparent
+                                selectedIconColor = SiteMateOrange, selectedTextColor = SiteMateOrange,
+                                unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray, indicatorColor = Color.Transparent
                             )
                         )
                     }
                 }
 
-                // ULTRA-SLIM FOOTER (Sits safely below the Nav Bar)
+                // --- ULTRA-SLIM FOOTER ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(Color.White)
-                        .padding(bottom = 6.dp), // Tiny padding for the very bottom edge
+                        // Kept the padding tight so it still sits perfectly below the icons!
+                        .padding(top = 2.dp, bottom = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -183,6 +187,7 @@ fun SingleProjectDashboardScreen(
                 }
             }
         }
+
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (selectedTab) {
@@ -230,7 +235,7 @@ fun ProjectHomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // LEFT COLUMN
+                    // LEFT COLUMN
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                     val displayDate = java.text.SimpleDateFormat("EEEE, MMM dd, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
                     Text(displayDate, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -243,8 +248,18 @@ fun ProjectHomeScreen(
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
+
+                    // --- NEW: DYNAMICALLY HIDE PROVINCE & REGION ---
+                    val locationParts = project.location.split(",")
+                    val displayLocation = if (locationParts.size >= 4) {
+                        // Drops the last two items (e.g., Oriental Mindoro and Region 4-B)
+                        locationParts.dropLast(2).joinToString(",").trim()
+                    } else {
+                        project.location
+                    }
+
                     Text(
-                        text = project.location,
+                        text = displayLocation,
                         color = Color.LightGray,
                         fontSize = 12.sp,
                         maxLines = 2,
@@ -252,21 +267,32 @@ fun ProjectHomeScreen(
                     )
                 }
 
-                // RIGHT COLUMN - Weather Forecast
+                // RIGHT COLUMN - Weather Forecast (DYNAMIC)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.height(72.dp)
                 ) {
+                    // Map tailored specifically for the Philippine / Oriental Mindoro climate
+                    val weatherData = when (viewModel.weatherCode) {
+                        0 -> Pair(Icons.Filled.WbSunny, SiteMateOrange) // Clear & Sunny
+                        1, 2, 3 -> Pair(Icons.Filled.Cloud, Color.LightGray) // Partly Cloudy to Overcast
+                        45 -> Pair(Icons.Filled.Cloud, Color.Gray) // Foggy (e.g., morning mountain fog)
+                        51, 53, 55, 61, 63, 65, 80, 81, 82 -> Pair(Icons.Filled.WaterDrop, Color(0xFF4FC3F7)) // Drizzle, Showers, and Monsoon Rain
+                        95, 96, 99 -> Pair(Icons.Filled.Bolt, Color(0xFFFFD54F)) // Thunderstorms & Typhoon conditions
+                        -1 -> Pair(Icons.Filled.CloudOff, Color.DarkGray) // OFFLINE / API ERROR ICON
+                        else -> Pair(Icons.Filled.Cloud, Color.LightGray) // Fallback for weird data
+                    }
+
                     Icon(
-                        imageVector = Icons.Filled.WbSunny,
-                        contentDescription = "Sunny",
-                        tint = SiteMateOrange,
+                        imageVector = weatherData.first,
+                        contentDescription = "Weather",
+                        tint = weatherData.second,
                         modifier = Modifier.size(32.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "32°C",
+                        text = viewModel.weatherTemp, // DYNAMIC TEMPERATURE
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -385,6 +411,12 @@ fun AlertCard(message: String, icon: androidx.compose.ui.graphics.vector.ImageVe
 // ==========================================
 // 2. PROGRESS TAB
 // ==========================================
+enum class MilestoneFilter {
+    ALL,
+    ACCOMPLISHED,
+    PENDING
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectProgressScreen(
@@ -402,14 +434,44 @@ fun ProjectProgressScreen(
         return
     }
 
+    var filter by remember { mutableStateOf(MilestoneFilter.ALL) }
+    var expandedFilterMenu by remember { mutableStateOf(false) }
+
+    val allMilestones = viewModel.milestones
+    val filteredMilestones = remember(allMilestones, filter) {
+        when (filter) {
+            MilestoneFilter.ALL -> allMilestones
+            MilestoneFilter.ACCOMPLISHED -> allMilestones.filter { it.progress == 1f }
+            MilestoneFilter.PENDING -> allMilestones.filter { it.progress < 1f }
+        }
+    }
+
+    val lockStatusMap = remember(allMilestones) {
+        val map = mutableMapOf<String, Boolean>()
+        var previousComplete = true
+        allMilestones.forEach { milestone ->
+            val isLocked = !previousComplete
+            map[milestone.id] = isLocked
+            if (milestone.progress < 1f) previousComplete = false
+        }
+        map
+    }
+
+    val currentMilestoneId = remember(allMilestones) {
+        allMilestones.find { it.progress < 1f }?.id
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Breadcrumb
         val breadcrumb = listOf(project.subCategory, project.category, project.type)
             .filter { it.isNotBlank() }
             .joinToString(" > ")
-
         Text(
             text = breadcrumb.ifEmpty { "Unclassified Project" },
             fontSize = 12.sp,
@@ -418,22 +480,53 @@ fun ProjectProgressScreen(
             modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
         )
 
-        Text("Project Status", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = SiteMateBlue, modifier = Modifier.align(Alignment.Start))
+        Text(
+            "Project Status",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = SiteMateBlue,
+            modifier = Modifier.align(Alignment.Start)
+        )
         Spacer(modifier = Modifier.height(16.dp))
 
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(140.dp)) {
-            CircularProgressIndicator(progress = { 1f }, modifier = Modifier.fillMaxSize(), color = Color.LightGray.copy(alpha = 0.3f), strokeWidth = 12.dp, trackColor = Color.Transparent)
-            CircularProgressIndicator(progress = { viewModel.overallProgress }, modifier = Modifier.fillMaxSize(), color = SiteMateOrange, strokeWidth = 12.dp, trackColor = Color.Transparent)
+        // --- PROGRESS WHEEL (restored) ---
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(140.dp)
+        ) {
+            CircularProgressIndicator(
+                progress = { 1f },
+                modifier = Modifier.fillMaxSize(),
+                color = Color.LightGray.copy(alpha = 0.3f),
+                strokeWidth = 12.dp,
+                trackColor = Color.Transparent
+            )
+            CircularProgressIndicator(
+                progress = { viewModel.overallProgress },
+                modifier = Modifier.fillMaxSize(),
+                color = SiteMateOrange,
+                strokeWidth = 12.dp,
+                trackColor = Color.Transparent
+            )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "${(viewModel.overallProgress * 100).toInt()}%", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = SiteMateBlue)
+                Text(
+                    text = "${(viewModel.overallProgress * 100).toInt()}%",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SiteMateBlue
+                )
                 val statusColor = if (viewModel.overallProgress == 1f) Color(0xFF4CAF50) else SiteMateOrange
-                Text(text = if (viewModel.overallProgress == 1f) "Completed" else "In Progress", fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (viewModel.overallProgress == 1f) "Completed" else "In Progress",
+                    fontSize = 12.sp,
+                    color = statusColor,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
-
         Spacer(modifier = Modifier.height(24.dp))
 
-// THE UPDATED DEADLINE CARD
+        // Deadline Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -451,40 +544,84 @@ fun ProjectProgressScreen(
                     ProgressStat("Start Date", viewModel.startDateText)
                     ProgressStat("Days until Start", viewModel.daysUntilStart)
                 }
-
-                // Target Deadline always stays on the right
                 ProgressStat("Target Deadline", viewModel.targetDeadline, isHighlight = true)
             }
         }
-
         Spacer(modifier = Modifier.height(32.dp))
 
-        Text("Phase Milestones", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SiteMateBlue, modifier = Modifier.align(Alignment.Start))
+        // Phase Milestones header with filter dropdown
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Phase Milestones",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = SiteMateBlue
+            )
+            Box {
+                OutlinedButton(
+                    onClick = { expandedFilterMenu = true },
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = when (filter) {
+                            MilestoneFilter.ALL -> "Show All"
+                            MilestoneFilter.ACCOMPLISHED -> "Accomplished"
+                            MilestoneFilter.PENDING -> "Pending"
+                        },
+                        fontSize = 12.sp
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = expandedFilterMenu,
+                    onDismissRequest = { expandedFilterMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Show All") },
+                        onClick = { filter = MilestoneFilter.ALL; expandedFilterMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Show Accomplished") },
+                        onClick = { filter = MilestoneFilter.ACCOMPLISHED; expandedFilterMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Show Pending") },
+                        onClick = { filter = MilestoneFilter.PENDING; expandedFilterMenu = false }
+                    )
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
-        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        // Milestones list
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                if (viewModel.milestones.isEmpty()) {
-                    Text("No milestones found.", color = Color.Gray, fontSize = 14.sp)
+                if (filteredMilestones.isEmpty()) {
+                    Text("No milestones to show.", color = Color.Gray, fontSize = 14.sp)
                 }
-
-                var previousIsComplete = true // Used to enforce sequential locking
-
-                viewModel.milestones.forEachIndexed { index, milestone ->
-                    // Logic to find the active milestone
-                    val isLocked = !previousIsComplete
-                    val isCurrent = previousIsComplete && milestone.progress < 1f
-
+                filteredMilestones.forEachIndexed { index, milestone ->
+                    val isLocked = lockStatusMap[milestone.id] ?: false
+                    val isCurrent = milestone.id == currentMilestoneId
+                    val isLast = index == filteredMilestones.lastIndex
                     MilestoneItem(
                         milestone = milestone,
-                        isLast = index == viewModel.milestones.size - 1,
+                        isLast = isLast,
                         isLocked = isLocked,
                         isCurrent = isCurrent
                     )
-
-                    if (milestone.progress < 1f) {
-                        previousIsComplete = false
-                    }
                 }
             }
         }
@@ -495,16 +632,13 @@ fun ProjectProgressScreen(
 @Composable
 fun MilestoneItem(milestone: Milestone, isLast: Boolean, isLocked: Boolean, isCurrent: Boolean) {
     var expanded by remember { mutableStateOf(false) }
-
-    // Grey out locked phases completely
     val alpha = if (isLocked) 0.4f else 1f
-    // Highlight the active milestone
     val highlightBg = if (isCurrent) SiteMateBlue.copy(alpha = 0.05f) else Color.Transparent
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(highlightBg, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .background(highlightBg, RoundedCornerShape(8.dp))
             .padding(8.dp)
     ) {
         Row(
@@ -517,8 +651,7 @@ fun MilestoneItem(milestone: Milestone, isLast: Boolean, isLocked: Boolean, isCu
                     milestone.progress > 0f -> SiteMateOrange
                     else -> Color.LightGray
                 }
-                Box(modifier = Modifier.size(16.dp).background(circleColor.copy(alpha = alpha), shape = androidx.compose.foundation.shape.CircleShape))
-
+                Box(modifier = Modifier.size(16.dp).background(circleColor.copy(alpha = alpha), CircleShape))
                 if (!isLast) {
                     Box(modifier = Modifier.width(2.dp).height(40.dp).background(Color.LightGray.copy(alpha = alpha)))
                 }
@@ -526,40 +659,101 @@ fun MilestoneItem(milestone: Milestone, isLast: Boolean, isLocked: Boolean, isCu
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = milestone.title, fontSize = 14.sp, fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold, color = SiteMateBlue.copy(alpha = alpha))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = milestone.title,
+                        fontSize = 14.sp,
+                        fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold,
+                        color = SiteMateBlue.copy(alpha = alpha)
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "${(milestone.progress * 100).toInt()}%", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (milestone.progress == 1f) Color(0xFF4CAF50).copy(alpha = alpha) else SiteMateOrange.copy(alpha = alpha))
+                        Text(
+                            text = "${(milestone.progress * 100).toInt()}%",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (milestone.progress == 1f) Color(0xFF4CAF50).copy(alpha = alpha) else SiteMateOrange.copy(alpha = alpha)
+                        )
                         if (!isLocked) {
-                            Icon(imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp).padding(start = 4.dp))
+                            Icon(
+                                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(20.dp).padding(start = 4.dp)
+                            )
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = if (isLocked) "Locked" else milestone.status, fontSize = 12.sp, color = if (isCurrent) SiteMateOrange else Color.Gray.copy(alpha = alpha), fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal)
+                Text(
+                    text = if (isLocked) "Locked" else milestone.status,
+                    fontSize = 12.sp,
+                    color = if (isCurrent) SiteMateOrange else Color.Gray.copy(alpha = alpha),
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(progress = { milestone.progress }, modifier = Modifier.fillMaxWidth().height(6.dp), color = if (milestone.progress == 1f) Color(0xFF4CAF50).copy(alpha = alpha) else SiteMateOrange.copy(alpha = alpha), trackColor = Color.LightGray.copy(alpha = 0.3f))
+                LinearProgressIndicator(
+                    progress = { milestone.progress },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = if (milestone.progress == 1f) Color(0xFF4CAF50).copy(alpha = alpha) else SiteMateOrange.copy(alpha = alpha),
+                    trackColor = Color.LightGray.copy(alpha = 0.3f)
+                )
 
-                // THE DROPDOWN WORKS LIST
+                // ---- Expandable Works Section ----
                 AnimatedVisibility(visible = expanded && !isLocked, enter = fadeIn() + expandVertically()) {
                     Column(modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)) {
-                        milestone.works.forEach { workItem ->
-                            val isDone = milestone.completedWorks.contains(workItem)
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                                Icon(
-                                    imageVector = if (isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                                    contentDescription = null,
-                                    tint = if (isDone) Color(0xFF4CAF50) else Color.LightGray,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                        if (milestone.categorizedWorks != null) {
+                            // DEMOLITION: grouped activities
+                            milestone.categorizedWorks.forEach { (category, workList) ->
                                 Text(
-                                    text = workItem,
-                                    color = if (isDone) Color.DarkGray else Color.Gray,
-                                    fontSize = 12.sp,
-                                    textDecoration = if (isDone) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                                    text = category,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = SiteMateBlue.copy(alpha = alpha),
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                                 )
+                                workList.forEach { workItem ->
+                                    val isDone = milestone.completedWorks.contains(workItem)
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                                        Icon(
+                                            imageVector = if (isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                            contentDescription = null,
+                                            tint = if (isDone) Color(0xFF4CAF50) else Color.LightGray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = workItem,
+                                            color = if (isDone) Color.DarkGray else Color.Gray,
+                                            fontSize = 12.sp,
+                                            textDecoration = if (isDone) TextDecoration.LineThrough else null
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // VERTICAL / HORIZONTAL: simple flat list
+                            milestone.works.forEach { workItem ->
+                                val isDone = milestone.completedWorks.contains(workItem)
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                                    Icon(
+                                        imageVector = if (isDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (isDone) Color(0xFF4CAF50) else Color.LightGray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = workItem,
+                                        color = if (isDone) Color.DarkGray else Color.Gray,
+                                        fontSize = 12.sp,
+                                        textDecoration = if (isDone) TextDecoration.LineThrough else null
+                                    )
+                                }
                             }
                         }
                     }
@@ -568,7 +762,6 @@ fun MilestoneItem(milestone: Milestone, isLast: Boolean, isLocked: Boolean, isCu
         }
     }
 }
-
 @Composable
 fun ProgressStat(label: String, value: String, isHighlight: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -581,7 +774,6 @@ fun ProgressStat(label: String, value: String, isHighlight: Boolean = false) {
 // ==========================================
 // 3. DAILY TAB (SITE DIARY)
 // ==========================================
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDailyScreen(
@@ -1392,13 +1584,21 @@ fun ProjectReportsScreen(
         viewModel.loadReports(projectId)
     }
 
+    var selectedReportType by remember { mutableStateOf("Daily Accomplishment") }
+    val reportTypes = listOf("Daily Accomplishment", "Overall Progress")
+
     var selectedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
 
     val displayFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val displayDate = displayFormatter.format(selectedCalendar.time)
-
     val dbFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val dbDateString = dbFormatter.format(selectedCalendar.time)
+
+    var expanded by remember { mutableStateOf(false) }
+
+    //Delete Button
+    var isDeleteMode by remember { mutableStateOf(false) }
+    var reportToDelete by remember { mutableStateOf<ReportDoc?>(null) }
 
     val datePickerDialog = DatePickerDialog(
         context,
@@ -1425,47 +1625,86 @@ fun ProjectReportsScreen(
 
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Report Type Dropdown
 
-                OutlinedTextField(
-                    value = "Daily Accomplishment Report",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Report Type") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = SiteMateBlue,
-                        disabledBorderColor = Color.LightGray,
-                        disabledLabelColor = Color.Gray
-                    ),
-                    enabled = false,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedReportType,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Report Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        colors = OutlinedTextFieldDefaults.colors(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor() // 👈 This anchors the dropdown to the text field
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        reportTypes.forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(type) },
+                                onClick = {
+                                    selectedReportType = type
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedButton(
-                    onClick = { datePickerDialog.show() },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                ) {
-                    Icon(Icons.Filled.DateRange, contentDescription = null, tint = SiteMateOrange)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = displayDate, color = SiteMateBlue, fontSize = 16.sp)
+                // Date picker only for Daily Accomplishment
+                if (selectedReportType == "Daily Accomplishment") {
+                    OutlinedButton(
+                        onClick = { datePickerDialog.show() },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Icon(Icons.Filled.DateRange, contentDescription = null, tint = SiteMateOrange)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = displayDate, color = SiteMateBlue, fontSize = 16.sp)
+                    }
+                } else {
+                    // For Overall Progress, show info text
+                    Text(
+                        text = "This will generate a report of the project's overall progress based on all milestones.",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = {
-                        viewModel.generateReport(
-                            context = context,
-                            projectId = projectId,
-                            type = "Daily Accomplishment Report",
-                            dateString = dbDateString
-                        ) { success ->
-                            if (success) {
-                                Toast.makeText(context, "PDF saved to your Downloads folder!", Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(context, "Failed to generate report. Please try again.", Toast.LENGTH_LONG).show()
+                        when (selectedReportType) {
+                            "Daily Accomplishment" -> {
+                                viewModel.generateReport(
+                                    context = context,
+                                    projectId = projectId,
+                                    type = "Daily Accomplishment Report",
+                                    dateString = dbDateString
+                                ) { success ->
+                                    if (success) Toast.makeText(context, "PDF saved to Downloads!", Toast.LENGTH_LONG).show()
+                                    else Toast.makeText(context, "Failed to generate report.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            "Overall Progress" -> {
+                                viewModel.generateOverallProgressReport(
+                                    context = context,
+                                    projectId = projectId
+                                ) { success ->
+                                    if (success) Toast.makeText(context, "Overall progress report saved to Downloads!", Toast.LENGTH_LONG).show()
+                                    else Toast.makeText(context, "Failed to generate overall report.", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                     },
@@ -1488,7 +1727,26 @@ fun ProjectReportsScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Text("Report Archive", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SiteMateBlue)
+        // Report Archive header with delete mode toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Report Archive", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SiteMateBlue)
+            TextButton(
+                onClick = { isDeleteMode = !isDeleteMode },
+                colors = ButtonDefaults.textButtonColors(contentColor = if (isDeleteMode) Color.Red else SiteMateOrange)
+            ) {
+                Icon(
+                    imageVector = if (isDeleteMode) Icons.Filled.Close else Icons.Filled.Delete,
+                    contentDescription = if (isDeleteMode) "Cancel Delete Mode" else "Delete Reports",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(if (isDeleteMode) "Cancel" else "Delete")
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         if (viewModel.reports.isEmpty()) {
@@ -1499,25 +1757,61 @@ fun ProjectReportsScreen(
                     title = report.title,
                     date = report.date,
                     type = report.type,
+                    isDeleteMode = isDeleteMode,
                     onDownload = {
-                        // DYNAMIC GENERATION: Because we aren't using the cloud, clicking download simply
-                        // triggers the exact same function to recreate the PDF locally!
-                        viewModel.generateReport(
-                            context = context,
-                            projectId = projectId,
-                            type = report.type,
-                            dateString = report.id // Since we made the ID the date string!
-                        ) { success ->
-                            if (success) {
-                                Toast.makeText(context, "Old report re-downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        if (report.type == "Overall Progress") {
+                            viewModel.generateOverallProgressReport(
+                                context = context,
+                                projectId = projectId
+                            ) { success ->
+                                if (success) Toast.makeText(context, "Report re-downloaded", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            viewModel.generateReport(
+                                context = context,
+                                projectId = projectId,
+                                type = report.type,
+                                dateString = report.id
+                            ) { success ->
+                                if (success) Toast.makeText(context, "Report re-downloaded", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
-                    onShare = { /* Future PDF Share logic */ }
+                    onDelete = {
+                        reportToDelete = report
+                    }
                 )
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
+    }
+
+    // Delete confirmation dialog
+    if (reportToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { reportToDelete = null },
+            title = { Text("Delete Report", color = Color.Red, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete '${reportToDelete?.title}'? This action cannot be undone.", color = Color.DarkGray) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteReport(projectId, reportToDelete!!) {
+                            Toast.makeText(context, "Report deleted", Toast.LENGTH_SHORT).show()
+                            isDeleteMode = false
+                        }
+                        reportToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Delete Permanently")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { reportToDelete = null }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
@@ -1530,11 +1824,30 @@ fun ReportToggleRow(label: String, isChecked: Boolean, onCheckedChange: (Boolean
 }
 
 @Composable
-fun ReportArchiveCard(title: String, date: String, type: String, onDownload: () -> Unit, onShare: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+fun ReportArchiveCard(
+    title: String,
+    date: String,
+    type: String,
+    isDeleteMode: Boolean,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(modifier = Modifier.size(40.dp).background(Color(0xFFE57373).copy(alpha = 0.2f), shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.size(40.dp)
+                        .background(Color(0xFFE57373).copy(alpha = 0.2f), shape = RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(Icons.Filled.PictureAsPdf, contentDescription = null, tint = Color(0xFFD32F2F))
                 }
                 Spacer(modifier = Modifier.width(16.dp))
@@ -1546,8 +1859,21 @@ fun ReportArchiveCard(title: String, date: String, type: String, onDownload: () 
                 }
             }
             Row {
-                IconButton(onClick = onDownload, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Download, contentDescription = "Download", tint = SiteMateBlue) }
-                IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) { Icon(Icons.Filled.Share, contentDescription = "Share", tint = SiteMateBlue) }
+                if (isDeleteMode) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color.Red)
+                    }
+                } else {
+                    IconButton(
+                        onClick = onDownload,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Filled.Download, contentDescription = "Download", tint = SiteMateBlue)
+                    }
+                }
             }
         }
     }
@@ -1556,6 +1882,7 @@ fun ReportArchiveCard(title: String, date: String, type: String, onDownload: () 
 // ==========================================
 // 5. ASSIGN TAB
 // ==========================================
+
 @Composable
 fun ProjectAssignScreen(
     projectId: String,
@@ -1567,17 +1894,93 @@ fun ProjectAssignScreen(
         viewModel.fetchAvailableUsers()
     }
 
-    // Filter the master list into our two categories
-    val clients = viewModel.teamMembers.filter { it.type == "Client" }
+    // --- SEARCH & SORT STATE ---
+    var searchQuery by remember { mutableStateOf("") }
+    var sortOption by remember { mutableStateOf("Name") }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     var isClientDeleteMode by remember { mutableStateOf(false) }
-
-    // Triggers for the new multi-select modals
     var showClientModal by remember { mutableStateOf(false) }
+
+    // --- FILTER & SORT LOGIC ---
+    // 1. Get only the clients
+    val clients = viewModel.teamMembers.filter { it.type == "Client" }
+
+    // 2. Apply the search query instantly
+    val searchedClients = if (searchQuery.isEmpty()) {
+        clients
+    } else {
+        clients.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+                    it.email.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    // 3. Sort the filtered results instantly
+    val finalFilteredClients = when (sortOption) {
+        "Email" -> searchedClients.sortedBy { it.email.lowercase() }
+        else -> searchedClients.sortedBy { it.name.lowercase() }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // --- SEARCH BAR & SORT DROPDOWN ---
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search clients by name...") },
+                leadingIcon = { Icon(Icons.Default.PersonSearch, contentDescription = null, tint = SiteMateOrange) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SiteMateOrange,
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Sort Dropdown Button
+            Box {
+                IconButton(
+                    onClick = { showSortMenu = true },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(SiteMateBlue.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(Icons.Default.FilterList, contentDescription = "Sort", tint = SiteMateBlue)
+                }
+
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Sort by Name", fontWeight = if (sortOption == "Name") FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { sortOption = "Name"; showSortMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Sort by Email", fontWeight = if (sortOption == "Email") FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { sortOption = "Email"; showSortMenu = false }
+                    )
+                }
+            }
+        }
 
         // --- CLIENT SECTION ---
         SectionHeader(
@@ -1589,13 +1992,15 @@ fun ProjectAssignScreen(
 
         if (clients.isEmpty()) {
             Text("No clients invited.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
+        } else if (finalFilteredClients.isEmpty()) {
+            Text("No matching clients found.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
         } else {
-            clients.forEach { member ->
+            // Use the SORTED & FILTERED list here!
+            finalFilteredClients.forEach { member ->
                 MemberCard(
                     member = member,
                     isDeleteMode = isClientDeleteMode,
                     isClient = true,
-                    // Pass all required parameters to completely remove them from the project
                     onDeleteClick = { viewModel.removeMember(projectId, member.id, member.email, "Client") },
                     onPermissionToggle = { isChecked ->
                         viewModel.toggleBudgetPermission(projectId, member.id, isChecked)
@@ -1605,7 +2010,6 @@ fun ProjectAssignScreen(
         }
         Spacer(modifier = Modifier.height(32.dp))
     }
-
 
     if (showClientModal) {
         UserSelectionModal(
@@ -1694,12 +2098,12 @@ fun MemberCard(
 @Composable
 fun UserSelectionModal(
     title: String,
-    users: List<SelectableUser>,
+    users: List<com.wharzc.sitemate.model.SelectableUser>, // Added explicit package assuming it matches your model
     isLoading: Boolean,
     onDismiss: () -> Unit,
-    onAssign: (List<SelectableUser>) -> Unit
+    onAssign: (List<com.wharzc.sitemate.model.SelectableUser>) -> Unit
 ) {
-    var selectedUsers by remember { mutableStateOf(setOf<SelectableUser>()) }
+    var selectedUsers by remember { mutableStateOf(setOf<com.wharzc.sitemate.model.SelectableUser>()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

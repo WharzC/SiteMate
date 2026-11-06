@@ -63,14 +63,11 @@ fun AppNavigation(
         }
 
         composable("admin_dashboard") {
-            AdminDashboard(
-                viewModel = adminViewModel,
-                onLogout = {
-                    navController.navigate("login_screen") {
-                        popUpTo(0)
-                    }
+            AdminDashboard(onLogout = {
+                navController.navigate("login") {
+                    popUpTo("admin_dashboard") { inclusive = true }
                 }
-            )
+            })
         }
     }
 }

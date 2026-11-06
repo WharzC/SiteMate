@@ -118,7 +118,7 @@ fun FarmerDashboard(viewModel: SensorViewModel, onLogout: () -> Unit) {
                 0 -> MonitoringScreen(viewModel)
                 1 -> FertilizerScreen(viewModel, fertViewModel)
                 2 -> HistoryScreen(historyViewModel)
-                3 -> Text("Profile Placeholder", color = Color.White, modifier = Modifier.fillMaxSize())
+                3 -> ProfileScreen(onSignOut = onLogout)
             }
         }
     }

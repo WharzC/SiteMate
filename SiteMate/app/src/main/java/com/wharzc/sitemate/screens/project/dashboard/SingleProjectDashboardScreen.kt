@@ -65,14 +65,19 @@ import android.os.Environment
 import android.content.Context
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import com.wharzc.sitemate.model.ReportDoc
+
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -237,7 +242,7 @@ fun ProjectHomeScreen(
             ) {
                     // LEFT COLUMN
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                    val displayDate = java.text.SimpleDateFormat("EEEE, MMM dd, yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+                    val displayDate = remember {java.text.SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.getDefault()).format(java.util.Date()) }
                     Text(displayDate, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -772,7 +777,7 @@ fun ProgressStat(label: String, value: String, isHighlight: Boolean = false) {
 }
 
 // ==========================================
-// 3. DAILY TAB (SITE DIARY)
+// 3. DAILY TAB (SITE DIARY) - CLOUDINARY VERSION
 // ==========================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -784,25 +789,23 @@ fun ProjectDailyScreen(
         viewModel.loadDailyLog(project.id, project.type)
     }
 
-    val displayDate = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+    val displayDate = remember {
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+    }
+    val context = LocalContext.current
 
-    // --- NEW: Unified Photo Viewer State ---
-    // Holds either an Android local Uri OR a Firebase String URL to view!
-    var photoUriToView by remember { mutableStateOf<Any?>(null) }
+    // --- Photo viewer state (for Cloudinary URLs) ---
+    var imageToView by remember { mutableStateOf<String?>(null) }
 
-    // --- State Variables ---
+    // --- State variables for modals (unchanged) ---
     var isWorkChangeMode by remember { mutableStateOf(false) }
     var workToDelete by remember { mutableStateOf<LoggedWork?>(null) }
     var showWorkModal by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    var tempPhotoUriForModal by remember { mutableStateOf<Uri?>(null) }
 
     var isManpowerChangeMode by remember { mutableStateOf(false) }
     var manpowerToDelete by remember { mutableStateOf<Pair<String, Int>?>(null) }
     var showManpowerModal by remember { mutableStateOf(false) }
-    val activeManpower = viewModel.manpowerList.filter { it.second > 0 }
 
-    // --- EQUIPMENT & MATERIALS STATES ---
     var isEquipmentChangeMode by remember { mutableStateOf(false) }
     var equipmentToDelete by remember { mutableStateOf<ResourceLog?>(null) }
     var showEquipmentModal by remember { mutableStateOf(false) }
@@ -811,18 +814,32 @@ fun ProjectDailyScreen(
     var materialToDelete by remember { mutableStateOf<ResourceLog?>(null) }
     var showMaterialModal by remember { mutableStateOf(false) }
 
-    // Helper data class for the temporary dynamic inputs inside the modals
-    data class ResourceInput(val id: String = UUID.randomUUID().toString(), val type: String, var name: String = "", var qty: String = "", var cost: String = "", var photoUri: Uri? = null)
+    // --- Temporary photo URIs for modals (to be uploaded) ---
+    var tempPhotoUriForWork by remember { mutableStateOf<Uri?>(null) }
+    var tempManpowerPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var tempEquipmentPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var tempMaterialPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedWorkNameForPhoto by remember { mutableStateOf<String?>(null) }
+    var selectedEquipmentForPhoto by remember { mutableStateOf<ResourceLog?>(null) }
+    var selectedMaterialForPhoto by remember { mutableStateOf<ResourceLog?>(null) }
 
-    // Shared Photo Picker for dynamic items
-    var activeInputIdForPhoto by remember { mutableStateOf<String?>(null) }
-    var equipmentInputs by remember { mutableStateOf(listOf<ResourceInput>()) }
-    var materialInputs by remember { mutableStateOf(listOf<ResourceInput>()) }
-
-    val dynamicPhotoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null && activeInputIdForPhoto != null) {
-            equipmentInputs = equipmentInputs.map { if (it.id == activeInputIdForPhoto) it.copy(photoUri = uri) else it }
-            materialInputs = materialInputs.map { if (it.id == activeInputIdForPhoto) it.copy(photoUri = uri) else it }
+    // --- Photo picker launchers ---
+    val workPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null && selectedWorkNameForPhoto != null) {
+            tempPhotoUriForWork = uri
+        }
+    }
+    val manpowerPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) tempManpowerPhotoUri = uri
+    }
+    val equipmentPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null && selectedEquipmentForPhoto != null) {
+            tempEquipmentPhotoUri = uri
+        }
+    }
+    val materialPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null && selectedMaterialForPhoto != null) {
+            tempMaterialPhotoUri = uri
         }
     }
 
@@ -831,19 +848,6 @@ fun ProjectDailyScreen(
             CircularProgressIndicator(color = SiteMateOrange)
         }
         return
-    }
-
-    var tempManpowerPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    val manpowerPhotoPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) tempManpowerPhotoUri = uri
-    }
-
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            tempPhotoUriForModal = uri
-        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -855,7 +859,6 @@ fun ProjectDailyScreen(
                 Text(displayDate)
             }
         }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         // --- 1. WORK ACCOMPLISHED CARD ---
@@ -870,7 +873,6 @@ fun ProjectDailyScreen(
             if (viewModel.loggedWorks.isEmpty()) {
                 Text("No activities added.", color = Color.Gray, fontSize = 14.sp)
             }
-
             viewModel.loggedWorks.forEach { work ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -878,40 +880,40 @@ fun ProjectDailyScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Text(text = "• ${work.name}", fontSize = 14.sp, color = Color.DarkGray)
-
-                        if (work.hasPhoto) {
+                        if (work.isUploading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Spacer(modifier = Modifier.width(8.dp))
-                            // UPDATED: Now triggers the unified image viewer
-                            IconButton(onClick = { photoUriToView = work.localUri ?: work.photoUrl }, modifier = Modifier.size(24.dp)) {
+                        }
+                        Text(text = "• ${work.name}", fontSize = 14.sp, color = Color.DarkGray)
+                        if (work.cloudinaryUrl != null && !work.isUploading) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = { imageToView = work.cloudinaryUrl }, modifier = Modifier.size(24.dp)) {
                                 Icon(Icons.Filled.Image, contentDescription = "View Photo", tint = SiteMateBlue, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
-
                     if (isWorkChangeMode) {
                         IconButton(onClick = { workToDelete = work }, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
                         }
                     }
-
                 }
             }
         }
 
-        // --- 2. MANPOWER PRESENT CARD ---
+        // --- 2. MANPOWER CARD ---
         DailyLogCard(
             title = "Manpower Present",
             icon = Icons.Filled.People,
-            hasItems = activeManpower.isNotEmpty(),
+            hasItems = viewModel.manpowerList.isNotEmpty() || viewModel.manpowerPhotoUrl != null,
             isChangeMode = isManpowerChangeMode,
             onChangeModeToggle = { isManpowerChangeMode = !isManpowerChangeMode },
             onAddClick = { showManpowerModal = true }
         ) {
-            if (activeManpower.isEmpty()) {
+            if (viewModel.manpowerList.isEmpty()) {
                 Text("No manpower added yet.", color = Color.Gray, fontSize = 14.sp)
             } else {
-                activeManpower.forEach { (role, count) ->
+                viewModel.manpowerList.forEach { (role, count) ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -921,7 +923,6 @@ fun ProjectDailyScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val headText = if (count == 1) "1 Head" else "$count Heads"
                             Text(text = headText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-
                             if (isManpowerChangeMode) {
                                 Spacer(modifier = Modifier.width(16.dp))
                                 IconButton(onClick = { manpowerToDelete = role to count }, modifier = Modifier.size(24.dp)) {
@@ -931,8 +932,7 @@ fun ProjectDailyScreen(
                         }
                     }
                 }
-
-                if (viewModel.hasManpowerPhoto) {
+                if (viewModel.manpowerPhotoUrl != null) {
                     Divider(modifier = Modifier.padding(vertical = 8.dp), color = Color.LightGray.copy(alpha = 0.3f))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -944,8 +944,7 @@ fun ProjectDailyScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Workforce Photo Attached", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        // UPDATED: Now triggers the unified image viewer
-                        TextButton(onClick = { photoUriToView = viewModel.manpowerLocalUri ?: viewModel.manpowerPhotoUrl }) {
+                        TextButton(onClick = { imageToView = viewModel.manpowerPhotoUrl }) {
                             Text("View", color = SiteMateOrange, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -960,22 +959,24 @@ fun ProjectDailyScreen(
             hasItems = viewModel.equipmentList.isNotEmpty(),
             isChangeMode = isEquipmentChangeMode,
             onChangeModeToggle = { isEquipmentChangeMode = !isEquipmentChangeMode },
-            onAddClick = {
-                equipmentInputs = listOf(ResourceInput(type = "Equipment"))
-                showEquipmentModal = true
-            }
+            onAddClick = { showEquipmentModal = true }
         ) {
             if (viewModel.equipmentList.isEmpty()) Text("No equipment added.", color = Color.Gray, fontSize = 14.sp)
             viewModel.equipmentList.forEach { item ->
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = SiteMateBlue)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (item.isUploading) {
+                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = SiteMateBlue)
+                        }
                         Text(text = "${item.quantity} units | ₱${item.cost}", fontSize = 12.sp, color = Color.Gray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // UPDATED: Now triggers the unified image viewer
-                        if (item.hasPhoto) {
-                            IconButton(onClick = { photoUriToView = item.localUri ?: item.photoUrl }, modifier = Modifier.size(28.dp)) {
+                        if (item.cloudinaryUrl != null && !item.isUploading) {
+                            IconButton(onClick = { imageToView = item.cloudinaryUrl }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Image, contentDescription = "View Photo", tint = SiteMateBlue, modifier = Modifier.size(20.dp))
                             }
                         }
@@ -997,22 +998,24 @@ fun ProjectDailyScreen(
             hasItems = viewModel.materialList.isNotEmpty(),
             isChangeMode = isMaterialChangeMode,
             onChangeModeToggle = { isMaterialChangeMode = !isMaterialChangeMode },
-            onAddClick = {
-                materialInputs = listOf(ResourceInput(type = "Material"))
-                showMaterialModal = true
-            }
+            onAddClick = { showMaterialModal = true }
         ) {
             if (viewModel.materialList.isEmpty()) Text("No materials added.", color = Color.Gray, fontSize = 14.sp)
             viewModel.materialList.forEach { item ->
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if(item.type == "Expense") Color(0xFFD32F2F) else SiteMateBlue)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (item.isUploading) {
+                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(text = item.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if(item.type == "Expense") Color(0xFFD32F2F) else SiteMateBlue)
+                        }
                         Text(text = "${item.quantity} units | ₱${item.cost}", fontSize = 12.sp, color = Color.Gray)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // UPDATED: Now triggers the unified image viewer
-                        if (item.hasPhoto) {
-                            IconButton(onClick = { photoUriToView = item.localUri ?: item.photoUrl }, modifier = Modifier.size(28.dp)) {
+                        if (item.cloudinaryUrl != null && !item.isUploading) {
+                            IconButton(onClick = { imageToView = item.cloudinaryUrl }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Filled.Receipt, contentDescription = "View Receipt", tint = SiteMateBlue, modifier = Modifier.size(20.dp))
                             }
                         }
@@ -1030,7 +1033,7 @@ fun ProjectDailyScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { viewModel.saveDailyLog(project.id) { println("Saved!") } },
+            onClick = { viewModel.saveDailyLog(project.id) { Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show() } },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue),
             enabled = !viewModel.isSaving
@@ -1046,51 +1049,44 @@ fun ProjectDailyScreen(
         Spacer(modifier = Modifier.height(24.dp))
     }
 
-    // --- WORK ACCOMPLISHED MODAL ---
+    // ==========================================
+    // WORK ACCOMPLISHED MODAL (with photo upload)
+    // ==========================================
     if (showWorkModal) {
-        var selectedWorksWithPhotos by remember { mutableStateOf(mapOf<String, Uri?>()) }
-
-        val loggedWorkNames = viewModel.loggedWorks.map { it.name }
-        val pendingWorksToShow = viewModel.availableWorksForModal.filter { it !in loggedWorkNames }
+        var selectedWorks by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
 
         AlertDialog(
             onDismissRequest = { showWorkModal = false },
             title = { Text("Log Accomplished Work", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
             text = {
-                if (pendingWorksToShow.isEmpty()) {
+                if (viewModel.availableWorksForModal.isEmpty()) {
                     Text("No pending works for the current phase.", color = Color.Gray)
                 } else {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Current Phase: ${viewModel.currentActiveMilestoneId ?: "Loading..."}", fontSize = 12.sp, color = SiteMateOrange, modifier = Modifier.padding(bottom = 8.dp))
-
+                    Column {
+                        Text("Current Phase: ${viewModel.currentActiveMilestoneId ?: "Loading..."}", fontSize = 12.sp, color = SiteMateOrange)
                         LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                            items(pendingWorksToShow) { workName ->
-                                val isChecked = selectedWorksWithPhotos.containsKey(workName)
-
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            items(viewModel.availableWorksForModal) { workName ->
+                                val isChecked = selectedWorks[workName] == true
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Checkbox(
                                         checked = isChecked,
                                         onCheckedChange = { checked ->
-                                            val newMap = selectedWorksWithPhotos.toMutableMap()
-                                            if (checked) newMap[workName] = null
-                                            else newMap.remove(workName)
-                                            selectedWorksWithPhotos = newMap
+                                            selectedWorks = if (checked) selectedWorks + (workName to true)
+                                            else selectedWorks - workName
                                         },
                                         colors = CheckboxDefaults.colors(checkedColor = SiteMateOrange)
                                     )
                                     Text(text = workName, fontSize = 14.sp, modifier = Modifier.weight(1f))
 
                                     if (isChecked) {
-                                        val workPhotoUri = selectedWorksWithPhotos[workName]
-                                        val hasPhoto = workPhotoUri != null
-
+                                        val hasPhoto = tempPhotoUriForWork != null && selectedWorkNameForPhoto == workName
                                         IconButton(
                                             onClick = {
-                                                tempPhotoUriForModal = null
-                                                photoPickerLauncher.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                                )
-                                                Toast.makeText(context, "Select a photo for '$workName'", Toast.LENGTH_SHORT).show()
+                                                selectedWorkNameForPhoto = workName
+                                                workPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                             },
                                             modifier = Modifier.size(32.dp)
                                         ) {
@@ -1100,13 +1096,6 @@ fun ProjectDailyScreen(
                                                 tint = if (hasPhoto) Color(0xFF4CAF50) else Color.Gray,
                                                 modifier = Modifier.size(20.dp)
                                             )
-                                        }
-
-                                        if (tempPhotoUriForModal != null && !hasPhoto) {
-                                            val newMap = selectedWorksWithPhotos.toMutableMap()
-                                            newMap[workName] = tempPhotoUriForModal
-                                            selectedWorksWithPhotos = newMap
-                                            tempPhotoUriForModal = null
                                         }
                                     }
                                 }
@@ -1118,15 +1107,22 @@ fun ProjectDailyScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        selectedWorksWithPhotos.forEach { (name, uri) ->
-                            val hasPhoto = uri != null
-                            // UPDATED: Now passes the localUri into the LoggedWork object!
-                            viewModel.loggedWorks.add(LoggedWork(name = name, hasPhoto = hasPhoto, localUri = uri))
+                        selectedWorks.keys.forEach { workName ->
+                            val photoUri = if (selectedWorkNameForPhoto == workName) tempPhotoUriForWork else null
+                            if (photoUri != null) {
+                                viewModel.addWorkWithPhoto(workName, photoUri, project.id)
+                            } else {
+                                // No photo – just add the work without image
+                                val tempWork = LoggedWork(name = workName, isUploading = false)
+                                viewModel.loggedWorks.add(tempWork)
+                            }
                         }
-                        viewModel.autoSaveDraft(project.id) // <--- AUTO SAVE DRAFT
-                        tempPhotoUriForModal = null
+                        viewModel.autoSaveDraft(project.id)
+                        selectedWorks = emptyMap()
+                        tempPhotoUriForWork = null
+                        selectedWorkNameForPhoto = null
                         showWorkModal = false
-                        Toast.makeText(context, "Logged ${selectedWorksWithPhotos.size} items", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Logged ${selectedWorks.size} items", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)
                 ) {
@@ -1136,31 +1132,34 @@ fun ProjectDailyScreen(
             dismissButton = {
                 TextButton(onClick = {
                     showWorkModal = false
-                    tempPhotoUriForModal = null
+                    tempPhotoUriForWork = null
+                    selectedWorkNameForPhoto = null
                 }) { Text("Cancel", color = Color.Gray) }
             }
         )
     }
 
-    // --- MANPOWER ADD MODAL ---
+    // ==========================================
+    // MANPOWER MODAL (with group photo)
+    // ==========================================
     if (showManpowerModal) {
         val allManpowerTypes = listOf(
             "Project Engineer", "Site Engineer", "Foreman", "Carpenter", "Mason",
             "Steelman / Rebar Worker", "Electrician", "Plumber", "Laborer",
             "Equipment Operator", "Welder", "Estimator"
         )
-        var manpowerInputs by remember { mutableStateOf(mapOf<String, String>()) }
+        var manpowerInputs by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
         AlertDialog(
             onDismissRequest = { showManpowerModal = false },
-            title = { Text("HEADCOUNTS", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
+            title = { Text("Headcounts", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column {
                     OutlinedButton(
-                        onClick = { manpowerPhotoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = { manpowerPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     ) {
-                        val hasPhoto = tempManpowerPhotoUri != null || viewModel.hasManpowerPhoto
+                        val hasPhoto = tempManpowerPhotoUri != null || viewModel.manpowerPhotoUrl != null
                         Icon(
                             imageVector = if (hasPhoto) Icons.Filled.CheckCircle else Icons.Filled.AddAPhoto,
                             contentDescription = "Attach Photo",
@@ -1169,7 +1168,6 @@ fun ProjectDailyScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(if (hasPhoto) "Group Photo Attached" else "Attach Group Photo", color = SiteMateBlue)
                     }
-
                     LazyColumn(modifier = Modifier.heightIn(max = 350.dp)) {
                         items(allManpowerTypes) { role ->
                             Row(
@@ -1178,28 +1176,17 @@ fun ProjectDailyScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(text = role, fontSize = 14.sp, modifier = Modifier.weight(1f))
-
                                 OutlinedTextField(
                                     value = manpowerInputs[role] ?: "",
                                     onValueChange = { input ->
-                                        val cleanInput = input.filter { it.isDigit() }
-                                        if (cleanInput.isEmpty()) {
-                                            val newMap = manpowerInputs.toMutableMap()
-                                            newMap.remove(role)
-                                            manpowerInputs = newMap
-                                        } else {
-                                            val count = cleanInput.toIntOrNull()
-                                            if (count != null && count <= 1000) {
-                                                val newMap = manpowerInputs.toMutableMap()
-                                                newMap[role] = count.toString()
-                                                manpowerInputs = newMap
-                                            }
-                                        }
+                                        val clean = input.filter { it.isDigit() }
+                                        if (clean.isEmpty()) manpowerInputs = manpowerInputs - role
+                                        else manpowerInputs = manpowerInputs + (role to clean)
                                     },
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.width(70.dp).height(50.dp),
                                     singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    textStyle = TextStyle(textAlign = TextAlign.Center)
                                 )
                             }
                         }
@@ -1222,17 +1209,14 @@ fun ProjectDailyScreen(
                             }
                         }
                         if (tempManpowerPhotoUri != null) {
-                            viewModel.hasManpowerPhoto = true
-                            viewModel.manpowerLocalUri = tempManpowerPhotoUri // UPDATED: Save local Uri
+                            viewModel.addManpowerPhoto(tempManpowerPhotoUri!!, project.id)
                         }
-                        viewModel.autoSaveDraft(project.id) // <--- AUTO SAVE DRAFT
+                        viewModel.autoSaveDraft(project.id)
                         tempManpowerPhotoUri = null
                         showManpowerModal = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)
-                ) {
-                    Text("Submit")
-                }
+                ) { Text("Submit") }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -1243,13 +1227,17 @@ fun ProjectDailyScreen(
         )
     }
 
-    // --- EQUIPMENT MODAL ---
+    // ==========================================
+    // EQUIPMENT MODAL (with photo per item)
+    // ==========================================
     if (showEquipmentModal) {
+        var equipmentInputs by remember { mutableStateOf(listOf<EquipmentInput>()) }
+
         AlertDialog(
             onDismissRequest = { showEquipmentModal = false },
             title = { Text("Log Equipment", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column {
                     LazyColumn(modifier = Modifier.heightIn(max = 350.dp)) {
                         items(equipmentInputs) { input ->
                             Row(
@@ -1257,61 +1245,61 @@ fun ProjectDailyScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                IconButton(
-                                    onClick = { equipmentInputs = equipmentInputs.filter { it.id != input.id } },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
+                                IconButton(onClick = { equipmentInputs = equipmentInputs.filter { it.id != input.id } }, modifier = Modifier.size(24.dp)) {
                                     Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(16.dp))
                                 }
-
                                 OutlinedTextField(
                                     value = input.name,
                                     onValueChange = { n -> equipmentInputs = equipmentInputs.map { if (it.id == input.id) it.copy(name = n) else it } },
                                     label = { Text("Equipment", fontSize = 10.sp) },
                                     modifier = Modifier.weight(1.4f).height(56.dp),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    singleLine = true
                                 )
-
                                 OutlinedTextField(
                                     value = input.qty,
                                     onValueChange = { q -> val clean = q.filter { it.isDigit() }; equipmentInputs = equipmentInputs.map { if (it.id == input.id) it.copy(qty = clean) else it } },
                                     label = { Text("Qty", fontSize = 10.sp) },
                                     modifier = Modifier.weight(0.8f).height(56.dp),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
                                 )
-
                                 OutlinedTextField(
                                     value = input.cost,
                                     onValueChange = { c -> val clean = c.filter { it.isDigit() }; equipmentInputs = equipmentInputs.map { if (it.id == input.id) it.copy(cost = clean) else it } },
                                     label = { Text("Cost", fontSize = 10.sp) },
                                     prefix = { Text("₱ ", fontSize = 12.sp, color = SiteMateBlue) },
                                     modifier = Modifier.weight(1.1f).height(56.dp),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
                                 )
-
                                 IconButton(
-                                    onClick = { activeInputIdForPhoto = input.id; dynamicPhotoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                    onClick = {
+                                        selectedEquipmentForPhoto = ResourceLog(
+                                            id = input.id,
+                                            type = "Equipment",
+                                            name = input.name,
+                                            quantity = input.qty.toIntOrNull() ?: 0,
+                                            cost = input.cost
+                                        )
+                                        equipmentPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
                                     modifier = Modifier.size(28.dp)
                                 ) {
+                                    val hasPhoto = tempEquipmentPhotoUri != null && selectedEquipmentForPhoto?.id == input.id
                                     Icon(
-                                        imageVector = if (input.photoUri != null) Icons.Filled.CheckCircle else Icons.Filled.AddAPhoto,
+                                        imageVector = if (hasPhoto) Icons.Filled.CheckCircle else Icons.Filled.AddAPhoto,
                                         contentDescription = "Attach Photo",
-                                        tint = if (input.photoUri != null) Color(0xFF4CAF50) else SiteMateOrange,
+                                        tint = if (hasPhoto) Color(0xFF4CAF50) else SiteMateOrange,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
                         }
                         item {
-                            TextButton(onClick = { equipmentInputs = equipmentInputs + ResourceInput(type = "Equipment") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            TextButton(onClick = { equipmentInputs = equipmentInputs + EquipmentInput() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                                 Icon(Icons.Filled.Add, contentDescription = null, tint = SiteMateBlue)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Add Construction Equipment", color = SiteMateBlue, fontWeight = FontWeight.Bold)
+                                Text("Add Equipment", color = SiteMateBlue, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1323,27 +1311,51 @@ fun ProjectDailyScreen(
                         equipmentInputs.forEach { inp ->
                             val qty = inp.qty.toIntOrNull() ?: 0
                             if (inp.name.isNotBlank() && qty > 0) {
-                                // UPDATED: Passes the localUri to ResourceLog
-                                viewModel.equipmentList.add(ResourceLog(type = inp.type, name = inp.name, quantity = qty, cost = inp.cost.ifEmpty { "0" }, hasPhoto = inp.photoUri != null, localUri = inp.photoUri))
+                                val newItem = ResourceLog(
+                                    type = "Equipment",
+                                    name = inp.name,
+                                    quantity = qty,
+                                    cost = inp.cost.ifEmpty { "0" },
+                                    cloudinaryUrl = null,
+                                    isUploading = false
+                                )
+                                viewModel.equipmentList.add(newItem)
+
+                                // If a photo was taken for this item, upload it
+                                if (tempEquipmentPhotoUri != null && selectedEquipmentForPhoto?.name == inp.name) {
+                                    viewModel.addResourcePhoto(newItem, tempEquipmentPhotoUri!!, project.id)
+                                }
                             }
                         }
-                        viewModel.autoSaveDraft(project.id) // <--- AUTO SAVE DRAFT
+                        viewModel.autoSaveDraft(project.id)
+                        tempEquipmentPhotoUri = null
+                        selectedEquipmentForPhoto = null
                         showEquipmentModal = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)
                 ) { Text("Submit") }
             },
-            dismissButton = { TextButton(onClick = { showEquipmentModal = false }) { Text("Cancel", color = Color.Gray) } }
+            dismissButton = {
+                TextButton(onClick = {
+                    showEquipmentModal = false
+                    tempEquipmentPhotoUri = null
+                    selectedEquipmentForPhoto = null
+                }) { Text("Cancel", color = Color.Gray) }
+            }
         )
     }
 
-    // --- MATERIALS & EXPENSES MODAL ---
+    // ==========================================
+    // MATERIALS & EXPENSES MODAL (with receipt photo)
+    // ==========================================
     if (showMaterialModal) {
+        var materialInputs by remember { mutableStateOf(listOf<MaterialInput>()) }
+
         AlertDialog(
             onDismissRequest = { showMaterialModal = false },
             title = { Text("Log Materials & Expenses", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column {
                     LazyColumn(modifier = Modifier.heightIn(max = 350.dp)) {
                         items(materialInputs) { input ->
                             Row(
@@ -1351,51 +1363,51 @@ fun ProjectDailyScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                IconButton(
-                                    onClick = { materialInputs = materialInputs.filter { it.id != input.id } },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
+                                IconButton(onClick = { materialInputs = materialInputs.filter { it.id != input.id } }, modifier = Modifier.size(24.dp)) {
                                     Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(16.dp))
                                 }
-
                                 OutlinedTextField(
                                     value = input.name,
                                     onValueChange = { n -> materialInputs = materialInputs.map { if (it.id == input.id) it.copy(name = n) else it } },
                                     label = { Text(input.type, fontSize = 10.sp) },
                                     modifier = Modifier.weight(1.4f).height(56.dp),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    singleLine = true
                                 )
-
                                 OutlinedTextField(
                                     value = input.qty,
                                     onValueChange = { q -> val clean = q.filter { it.isDigit() }; materialInputs = materialInputs.map { if (it.id == input.id) it.copy(qty = clean) else it } },
                                     label = { Text("Qty", fontSize = 10.sp) },
                                     modifier = Modifier.weight(0.8f).height(56.dp),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
                                 )
-
                                 OutlinedTextField(
                                     value = input.cost,
                                     onValueChange = { c -> val clean = c.filter { it.isDigit() }; materialInputs = materialInputs.map { if (it.id == input.id) it.copy(cost = clean) else it } },
                                     label = { Text("Cost", fontSize = 10.sp) },
                                     prefix = { Text("₱ ", fontSize = 12.sp, color = SiteMateBlue) },
                                     modifier = Modifier.weight(1.1f).height(56.dp),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
                                 )
-
                                 IconButton(
-                                    onClick = { activeInputIdForPhoto = input.id; dynamicPhotoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                    onClick = {
+                                        selectedMaterialForPhoto = ResourceLog(
+                                            id = input.id,
+                                            type = input.type,
+                                            name = input.name,
+                                            quantity = input.qty.toIntOrNull() ?: 0,
+                                            cost = input.cost
+                                        )
+                                        materialPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
                                     modifier = Modifier.size(28.dp)
                                 ) {
+                                    val hasPhoto = tempMaterialPhotoUri != null && selectedMaterialForPhoto?.id == input.id
                                     Icon(
-                                        imageVector = if (input.photoUri != null) Icons.Filled.CheckCircle else Icons.Filled.AddAPhoto,
+                                        imageVector = if (hasPhoto) Icons.Filled.CheckCircle else Icons.Filled.AddAPhoto,
                                         contentDescription = "Attach Receipt",
-                                        tint = if (input.photoUri != null) Color(0xFF4CAF50) else SiteMateOrange,
+                                        tint = if (hasPhoto) Color(0xFF4CAF50) else SiteMateOrange,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -1403,11 +1415,11 @@ fun ProjectDailyScreen(
                         }
                         item {
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                TextButton(onClick = { materialInputs = materialInputs + ResourceInput(type = "Material") }) {
+                                TextButton(onClick = { materialInputs = materialInputs + MaterialInput(type = "Material") }) {
                                     Icon(Icons.Filled.Add, contentDescription = null, tint = SiteMateBlue, modifier = Modifier.size(16.dp))
                                     Text(" Add Material", color = SiteMateBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
-                                TextButton(onClick = { materialInputs = materialInputs + ResourceInput(type = "Expense") }) {
+                                TextButton(onClick = { materialInputs = materialInputs + MaterialInput(type = "Expense") }) {
                                     Icon(Icons.Filled.Add, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(16.dp))
                                     Text(" Add Expense", color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
@@ -1422,104 +1434,128 @@ fun ProjectDailyScreen(
                         materialInputs.forEach { inp ->
                             val qty = inp.qty.toIntOrNull() ?: 0
                             if (inp.name.isNotBlank() && qty > 0) {
-                                // UPDATED: Passes the localUri to ResourceLog
-                                viewModel.materialList.add(ResourceLog(type = inp.type, name = inp.name, quantity = qty, cost = inp.cost.ifEmpty { "0" }, hasPhoto = inp.photoUri != null, localUri = inp.photoUri))
+                                val newItem = ResourceLog(
+                                    type = inp.type,
+                                    name = inp.name,
+                                    quantity = qty,
+                                    cost = inp.cost.ifEmpty { "0" },
+                                    cloudinaryUrl = null,
+                                    isUploading = false
+                                )
+                                viewModel.materialList.add(newItem)
+
+                                if (tempMaterialPhotoUri != null && selectedMaterialForPhoto?.name == inp.name) {
+                                    viewModel.addResourcePhoto(newItem, tempMaterialPhotoUri!!, project.id)
+                                }
                             }
                         }
-                        viewModel.autoSaveDraft(project.id) // <--- AUTO SAVE DRAFT
+                        viewModel.autoSaveDraft(project.id)
+                        tempMaterialPhotoUri = null
+                        selectedMaterialForPhoto = null
                         showMaterialModal = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)
                 ) { Text("Submit") }
             },
-            dismissButton = { TextButton(onClick = { showMaterialModal = false }) { Text("Cancel", color = Color.Gray) } }
+            dismissButton = {
+                TextButton(onClick = {
+                    showMaterialModal = false
+                    tempMaterialPhotoUri = null
+                    selectedMaterialForPhoto = null
+                }) { Text("Cancel", color = Color.Gray) }
+            }
         )
     }
 
-    // --- SHARED DELETE WARNINGS ---
+    // ==========================================
+    // DELETE CONFIRMATION DIALOGS (unchanged logic)
+    // ==========================================
     if (workToDelete != null) {
         AlertDialog(
             onDismissRequest = { workToDelete = null },
             title = { Text("Delete Log?", color = Color.Red, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete '${workToDelete?.name}'? This action cannot be recovered.", color = Color.DarkGray) },
+            text = { Text("Delete '${workToDelete?.name}'? This cannot be undone.", color = Color.DarkGray) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.loggedWorks.remove(workToDelete)
-                        workToDelete = null
-                        if (viewModel.loggedWorks.isEmpty()) isWorkChangeMode = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                ) {
-                    Text("Delete Permanently")
-                }
+                Button(onClick = { viewModel.loggedWorks.remove(workToDelete); workToDelete = null; if (viewModel.loggedWorks.isEmpty()) isWorkChangeMode = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") }
             },
-            dismissButton = {
-                TextButton(onClick = { workToDelete = null }) { Text("Cancel", color = Color.Gray) }
-            }
+            dismissButton = { TextButton(onClick = { workToDelete = null }) { Text("Cancel", color = Color.Gray) } }
         )
     }
-
     if (manpowerToDelete != null) {
         AlertDialog(
             onDismissRequest = { manpowerToDelete = null },
             title = { Text("Delete Manpower?", color = Color.Red, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to remove '${manpowerToDelete?.first}' from today's log? This action cannot be recovered.", color = Color.DarkGray) },
+            text = { Text("Remove '${manpowerToDelete?.first}'? This cannot be undone.", color = Color.DarkGray) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.manpowerList.remove(manpowerToDelete)
-                        manpowerToDelete = null
-                        if (viewModel.manpowerList.isEmpty()) isManpowerChangeMode = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                ) {
-                    Text("Delete Permanently")
-                }
+                Button(onClick = { viewModel.manpowerList.remove(manpowerToDelete); manpowerToDelete = null; if (viewModel.manpowerList.isEmpty()) isManpowerChangeMode = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") }
             },
-            dismissButton = {
-                TextButton(onClick = { manpowerToDelete = null }) { Text("Cancel", color = Color.Gray) }
-            }
+            dismissButton = { TextButton(onClick = { manpowerToDelete = null }) { Text("Cancel", color = Color.Gray) } }
+        )
+    }
+    if (equipmentToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { equipmentToDelete = null },
+            title = { Text("Delete Equipment?", color = Color.Red, fontWeight = FontWeight.Bold) },
+            text = { Text("Remove '${equipmentToDelete?.name}'?") },
+            confirmButton = {
+                Button(onClick = { viewModel.equipmentList.remove(equipmentToDelete); equipmentToDelete = null; if (viewModel.equipmentList.isEmpty()) isEquipmentChangeMode = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { equipmentToDelete = null }) { Text("Cancel", color = Color.Gray) } }
+        )
+    }
+    if (materialToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { materialToDelete = null },
+            title = { Text("Delete Material/Expense?", color = Color.Red, fontWeight = FontWeight.Bold) },
+            text = { Text("Remove '${materialToDelete?.name}'?") },
+            confirmButton = {
+                Button(onClick = { viewModel.materialList.remove(materialToDelete); materialToDelete = null; if (viewModel.materialList.isEmpty()) isMaterialChangeMode = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { materialToDelete = null }) { Text("Cancel", color = Color.Gray) } }
         )
     }
 
-    if (equipmentToDelete != null) {
-        AlertDialog(onDismissRequest = { equipmentToDelete = null }, title = { Text("Delete Equipment?", color = Color.Red, fontWeight = FontWeight.Bold) }, text = { Text("Remove '${equipmentToDelete?.name}' from log?") }, confirmButton = { Button(onClick = { viewModel.equipmentList.remove(equipmentToDelete); equipmentToDelete = null; if(viewModel.equipmentList.isEmpty()) isEquipmentChangeMode = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") } }, dismissButton = { TextButton(onClick = { equipmentToDelete = null }) { Text("Cancel", color = Color.Gray) } })
-    }
-    if (materialToDelete != null) {
-        AlertDialog(onDismissRequest = { materialToDelete = null }, title = { Text("Delete Material/Expense?", color = Color.Red, fontWeight = FontWeight.Bold) }, text = { Text("Remove '${materialToDelete?.name}' from log?") }, confirmButton = { Button(onClick = { viewModel.materialList.remove(materialToDelete); materialToDelete = null; if(viewModel.materialList.isEmpty()) isMaterialChangeMode = false }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("Delete") } }, dismissButton = { TextButton(onClick = { materialToDelete = null }) { Text("Cancel", color = Color.Gray) } })
-    }
-
-    // --- NEW: REAL IMAGE VIEWER DIALOG ---
-    if (photoUriToView != null) {
+    // ==========================================
+    // IMAGE VIEWER DIALOG (Cloudinary URL)
+    // ==========================================
+    if (imageToView != null) {
         AlertDialog(
-            onDismissRequest = { photoUriToView = null },
+            onDismissRequest = { imageToView = null },
             title = { Text("Attached Image", color = SiteMateBlue, fontWeight = FontWeight.Bold) },
             text = {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(350.dp).background(Color.Black, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+                    modifier = Modifier.fillMaxWidth().height(350.dp).background(Color.Black, shape = RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Coil AsyncImage seamlessly loads BOTH local device URIs and remote Firebase URLs!
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(photoUriToView)
+                            .data(imageToView)
                             .crossfade(true)
                             .build(),
-                        contentDescription = "Attached Document",
+                        contentDescription = "Attached Photo",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
                 }
             },
             confirmButton = {
-                Button(onClick = { photoUriToView = null }, colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)) {
+                Button(onClick = { imageToView = null }, colors = ButtonDefaults.buttonColors(containerColor = SiteMateBlue)) {
                     Text("Close")
                 }
             }
         )
     }
 }
+
+// Helper data classes for modal inputs (place outside any composable)
+data class EquipmentInput(val id: String = UUID.randomUUID().toString(), var name: String = "", var qty: String = "", var cost: String = "")
+data class MaterialInput(val id: String = UUID.randomUUID().toString(), val type: String, var name: String = "", var qty: String = "", var cost: String = "")
+
+
 // THE UPDATED CARD
 @Composable
 fun DailyLogCard(
@@ -1589,9 +1625,13 @@ fun ProjectReportsScreen(
 
     var selectedCalendar by remember { mutableStateOf(Calendar.getInstance()) }
 
-    val displayFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    val displayFormatter = remember {
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+    }
     val displayDate = displayFormatter.format(selectedCalendar.time)
-    val dbFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val dbFormatter = remember {
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+    }
     val dbDateString = dbFormatter.format(selectedCalendar.time)
 
     var expanded by remember { mutableStateOf(false) }

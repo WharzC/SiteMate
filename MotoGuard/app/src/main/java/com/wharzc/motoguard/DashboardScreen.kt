@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.database
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -293,7 +295,23 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // SOS Overlay (unchanged)
+// Inside your Composable, before the SOS Overlay Box
+        val database = Firebase.database.reference  // or FirebaseDatabase.getInstance().reference
+
+// Trigger the buzzer for 10 seconds when the alarm phase begins
+        LaunchedEffect(sosState) {
+            if (sosState == 2) {
+                try {
+                    database.child("Buzzer").setValue(true)
+                    delay(10_000) // 10 seconds
+                } finally {
+                    // Always reset, even if the effect is cancelled (e.g., state changes early)
+                    database.child("Buzzer").setValue(false)
+                }
+            }
+        }
+
+// SOS Overlay (unchanged except for the added effect above)
         if (sosState != 0) {
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(enabled = false) {},

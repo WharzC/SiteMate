@@ -37,6 +37,7 @@ import com.wharzc.sitemate.screens.project.ProjectsScreen
 import com.wharzc.sitemate.screens.project.dashboard.SingleProjectDashboardScreen
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.wharzc.sitemate.api.CloudinaryUnsignedUploader
 import com.wharzc.sitemate.screens.client.ClientDashboardScreen
 import com.wharzc.sitemate.screens.client.ClientWelcomeScreen
 import com.wharzc.sitemate.screens.client.ClientProjectsScreen
@@ -54,6 +55,8 @@ class MainActivity : ComponentActivity() {
                     val viewModel = remember { ProjectCreationViewModel() }
 
                     NavHost(navController = navController, startDestination = "splash") {
+
+
 
 
 
@@ -231,5 +234,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        CloudinaryUnsignedUploader.init(this)
     }
 }

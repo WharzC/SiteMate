@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "932936034773",
+    "project_id": "sentry-75ea6",
+    "storage_bucket": "sentry-75ea6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932936034773:android:cd4b4241f5cd538323b55c",
+        "android_client_info": {
+          "package_name": "com.wharzc.sentry"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwcpE7wi5E6YDIxnicyvINJLJyjzTCx_U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932936034773:android:18ef4ee5e068363a23b55c",
+        "android_client_info": {
+          "package_name": "sentry.iot2026"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwcpE7wi5E6YDIxnicyvINJLJyjzTCx_U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

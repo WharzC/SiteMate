@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "572055314446",
+    "firebase_url": "https://prime-system-54e0e-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "prime-system-54e0e",
+    "storage_bucket": "prime-system-54e0e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:572055314446:android:d55f876561b394ef7b9c5f",
+        "android_client_info": {
+          "package_name": "com.wharzc.prime"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeMzvwPVcw5Wu6_oAU_B9XiFWaiLFbBvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

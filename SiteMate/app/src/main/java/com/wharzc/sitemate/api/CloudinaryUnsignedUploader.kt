@@ -1,22 +1,27 @@
-package com.wharzc.sitemate.api
+package com.wharzc.sitemate.api   // change to a non‑navigation package
 
+import android.content.Context
 import android.net.Uri
-import android.util.Log
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlin.collections.get
 
 object CloudinaryUnsignedUploader {
-    private const val CLOUD_NAME = "ds3xbvqnp"// replace with your cloud name
-    private const val UPLOAD_PRESET = "sitemate_2026_assets"     // the preset you created
-    private const val BASE_FOLDER = "sitemate_uploads"       // root folder
+    private const val CLOUD_NAME = "your_cloud_name"      // replace
+    private const val UPLOAD_PRESET = "unsigned_sitemate" // replace
+    private const val BASE_FOLDER = "site_mate_uploads"
 
-    fun init(context: android.content.Context) {
-        if (!MediaManager.isInitialized()) {
-            MediaManager.init(context)
+    private var isInitialized = false
+
+    fun init(context: Context) {
+        if (!isInitialized) {
+            // Always use applicationContext to avoid leaks
+            MediaManager.init(context.applicationContext)
+            isInitialized = true
         }
     }
 
@@ -41,14 +46,17 @@ object CloudinaryUnsignedUploader {
                 }
 
                 override fun onSuccess(requestId: String, resultData: Map<*, *>) {
-                    val publicId = resultData["public_id"] as String
-                    val secureUrl = resultData["secure_url"] as String
-                    trySend(UploadResult.Success(publicId, secureUrl))
+                    val secureUrl = resultData["secure_url"] as? String
+                    if (secureUrl != null) {
+                        trySend(UploadResult.Success(secureUrl))
+                    } else {
+                        trySend(UploadResult.Error("Missing secure_url"))
+                    }
                     close()
                 }
 
                 override fun onError(requestId: String, error: ErrorInfo) {
-                    trySend(UploadResult.Error(error.exception?.message ?: error.description))
+                    trySend(UploadResult.Error(error.description))
                     close()
                 }
 
@@ -57,7 +65,7 @@ object CloudinaryUnsignedUploader {
             .dispatch()
 
         awaitClose {
-            MediaManager.get().cancelUpload(requestId)
+            MediaManager.get().cancelRequest(requestId)
         }
     }
 }
@@ -65,6 +73,6 @@ object CloudinaryUnsignedUploader {
 sealed class UploadResult {
     object Loading : UploadResult()
     data class Progress(val percent: Int) : UploadResult()
-    data class Success(val publicId: String, val secureUrl: String) : UploadResult()
+    data class Success(val secureUrl: String) : UploadResult()
     data class Error(val message: String) : UploadResult()
 }
